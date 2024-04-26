@@ -1,0 +1,171 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+void ImprovedInnerProduct(const int M, const int K, const int N, const int rN, float* aD, int* aC, int* aR, float* bD, int* bC, int* bR, float* cD, int* cC, int* cR){
+    int row_count = 0;
+    for(int row=0; row<M; row++){
+        cR[row] = row_count;
+        int start = aR[row];
+        int end = aR[row+1];
+        float* cD_ = (float *)malloc(K*sizeof(float));
+        for(int b_col=0; b_col<rN; b_col++){
+            for(int col=start; col<end; col++){
+                float valA = aD[col];
+                int r = aC[col];
+                float sum = 0;
+                int idx = 0;
+                int red_idx = 0;
+                for(int i=bR[r]; i<bR[r+1]; i++){
+                    if(red_idx == b_col){
+                        sum += valA * bD[i]; 
+                        idx = i;
+                        break;
+                    }
+                    red_idx ++;
+                }
+                if(sum != 0){
+                    cD_[bC[idx]] += sum;
+                }
+            }
+        }
+
+        for(int i=0; i<K; i++){
+            if (cD_[i] != 0){
+                cC[row_count] = i;
+                cD[row_count] = cD_[i];
+                row_count++;
+            }
+        }
+    }
+    cR[M] = row_count;
+}
+
+float cNNZ_estimation(int M, int K, int N, int aNNZ, int bNNZ){
+    long long MxK = (long long)M*(long long)K;
+    float density = (float)(aNNZ)/MxK + (float)(bNNZ)/MxK;
+    return density * M * N;
+}
+
+int main(){
+    FILE *file;
+    FILE *file1;
+    FILE *file2;
+    FILE *file3;
+
+    int* gInfo = (int *)malloc(4*sizeof(int));
+    //////////////////////////////////////////
+    int number;
+    file3 = fopen("MatData/GeneralInfo.txt", "r");
+    if (file3 == NULL) {
+        perror("Error opening file");
+        return -1;
+    }
+    int idx = 0;
+    while (fscanf(file3, "%d", &number) == 1) {
+        gInfo[idx] = number;
+        idx++;
+    }
+    fclose(file3);
+    //////////////////////////////////////////
+
+    const int M    = gInfo[0];
+    const int K    = gInfo[1];
+    const int N    = gInfo[0];
+    const int aNNZ = gInfo[2];
+    const int bNNZ = gInfo[2];
+    const int rN   = gInfo[3];
+
+    float* aD = (float *)malloc(aNNZ*sizeof(float));
+    int*   aC = (int *)malloc(aNNZ*sizeof(int));
+    int*   aR = (int *)malloc((M+1)*sizeof(int));
+
+    float* bD = (float *)malloc(bNNZ*sizeof(float));
+    int*   bC = (int *)malloc(bNNZ*sizeof(int));
+    int*   bR = (int *)malloc((K+1)*sizeof(int));
+
+    //////////////////////////////////////////
+    idx = 0;
+    file = fopen("MatData/CSR_values.txt", "r");
+    if (file == NULL) {
+        perror("Error opening file");
+        return -1;
+    }
+    float val;
+    while (fscanf(file, "%f", &val) == 1) {
+        aD[idx] = val;
+        bD[idx] = val;
+        idx++;
+    }
+    fclose(file);
+
+    //////////////////////////////////////////
+    file1 = fopen("MatData/CSR_colIdx.txt", "r");
+    if (file1 == NULL) {
+        perror("Error opening file");
+        return -1;
+    }
+    idx = 0;
+    while (fscanf(file1, "%d", &number) == 1) {
+        aC[idx] = number;
+        bC[idx] = number;
+        idx++;
+    }
+    fclose(file1);
+    //////////////////////////////////////////
+    file2 = fopen("MatData/CSR_rowPtr.txt", "r");
+    if (file2 == NULL) {
+        perror("Error opening file");
+        return -1;
+    }
+    idx = 0;
+    while (fscanf(file2, "%d", &number) == 1) {
+        aR[idx] = number;
+        bR[idx] = number;
+        idx++;
+    }
+    fclose(file2);
+    //////////////////////////////////////////
+
+    int cNNZ = cNNZ_estimation(M,K,N,aNNZ,bNNZ);
+    printf("Estimated cNNZ = %d \n", cNNZ);
+
+    float* cD = (float *)malloc(cNNZ*sizeof(float));
+    int* cC = (int *)malloc(cNNZ*sizeof(int));
+    int* cR = (int *)malloc((M+1)*sizeof(int));
+
+    if (cD == NULL) {
+        printf("Failed to allocate memory\n");
+        return 1;
+    }
+
+    ImprovedInnerProduct(M, K, N, rN, aD, aC, aR, bD, bC, bR, cD, cC, cR);
+
+    // for(int i=0; i<M+1; i++){
+    //     printf("%d\n", cR[i]);
+    //     for(int j=cR[i]; j<cR[i+1]; j++){
+    //         printf("%d %.f\n", cC[j], cD[j]);
+    //     }
+    // }
+
+    
+    // for(int i=0; i<M+1; i++){
+    //     for(int j=cR[i]; j<cR[i+1]; j++){
+    //         printf("%.f ", cD[j]);
+    //     }
+    //     printf("\n");
+    // }
+
+    printf("Actual cNNZ = %d \n", cR[M]);
+
+    free(aD);
+    free(aC);
+    free(aR);
+    free(bD);
+    free(bC);
+    free(bR);
+    free(cD);
+    free(cC);
+    free(cR);
+
+    return 0;
+}
